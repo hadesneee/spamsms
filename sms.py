@@ -25,8 +25,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore")
 
 # ============ CẤU HÌNH TELEGRAM ============
-TELEGRAM_BOT_TOKEN = "DÁN_TOKEN_BOT_TELEGRAM_VÀO_ĐÂY"
-TELEGRAM_ADMIN_ID  = 0   # <-- ID telegram của mày (int), lấy qua @userinfobot
+TELEGRAM_BOT_TOKEN = "8253814357:AAF6pZqZkxIcNYl9-HJTbw-u1fk3N_FlUas"
+TELEGRAM_ADMIN_ID  = 7203074291   # <-- ID telegram của mày (int), lấy qua @userinfobot
 
 # ============ KEY CỐ ĐỊNH ============
 DEFAULT_KEY = "GziNee"          # <-- key mặc định, không đổi
